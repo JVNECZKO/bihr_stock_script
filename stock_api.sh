@@ -1,19 +1,19 @@
 #!/bin/bash
 
-# Init Config
-userName="ApiUserName"
-passWord="ApiPasswd"
+# Konfiguracja
+userName="usrname"
+passWord="passwd"
 apiUrl="https://api.bihr.net/api/v2.1"
-downloadPath="defaultpath"
+downloadPath="stocks"  # Ścieżka relatywna od katalogu, w którym jest uruchamiany skrypt
 newFileName="stocks.csv"
 
-# Check if catalog available if not create folder
+# Sprawdzenie, czy katalog na pliki istnieje, jeśli nie - próba utworzenia
 if [ ! -d "$downloadPath" ]; then
-  echo "Katalog $downloadPath nie istnieje. Tworzenie katalogu."
+  echo "Tworzenie katalogu: $downloadPath"
   mkdir -p "$downloadPath"
 fi
 
-# Brearer token generation
+# Generowanie tokena
 response=$(curl -s -X 'POST' \
   "$apiUrl/Authentication/Token" \
   -H 'Content-Type: multipart/form-data' \
@@ -31,7 +31,7 @@ fi
 
 echo "Uzyskano token: $token"
 
-# Starting ZIP file generation
+# Rozpoczęcie generowania pliku ZIP
 response=$(curl -s -X 'POST' \
   "$apiUrl/Catalog/ZIP/CSV/Stocks/Full" \
   -H "Authorization: Bearer $token" \
@@ -48,7 +48,7 @@ fi
 
 echo "Ticket ID: $ticketId"
 
-# Checking about file generation status
+# Odpytywanie o status generacji pliku
 while true; do
   statusResponse=$(curl -s -X 'GET' \
     "$apiUrl/Catalog/GenerationStatus?ticketId=$ticketId" \
@@ -67,12 +67,7 @@ while true; do
   sleep 2
 done
 
-# Download generated ZIP File
-if [ -z "$downloadId" ]; then
-  echo "Brak DownloadId, nie można pobrać pliku."
-  exit 1
-fi
-
+# Pobieranie pliku ZIP
 zipFilePath="$downloadPath/temp_stocks.zip"
 echo "Ścieżka zapisu ZIP: $zipFilePath"
 
@@ -82,20 +77,19 @@ curl -s -X 'GET' \
   -H 'accept: */*' \
   -o "$zipFilePath"
 
-# Unzip .zip file
-if [ -f "$zipFilePath" ]; then
-  echo "Plik ZIP został pobrany. Rozpoczynanie wypakowywania..."
-  unzip -o "$zipFilePath" -d "$downloadPath" # Switch -o deny asking about override
-  rm "$zipFilePath" # Optional: Remove ZIP after extracting in root directory 
-  
-  # Changing CSV filename
-  csvFilePath=$(find $downloadPath -name '*.csv')
-  if [ -n "$csvFilePath" ]; then
-    mv "$csvFilePath" "$downloadPath/$newFileName"
-    echo "Plik CSV został zapisany jako: $downloadPath/$newFileName"
-  else
-    echo "Nie znaleziono pliku CSV po wypakowaniu."
-  fi
+# Wypakowanie pliku ZIP
+echo "Rozpoczynanie wypakowywania..."
+unzip -o "$zipFilePath" -d "$downloadPath"
+rm "$zipFilePath"
+
+# Zmiana nazwy pliku CSV
+csvFilePath=$(find $downloadPath -maxdepth 1 -type f -name '*.csv' -print -quit)
+if [ -f "$downloadPath/$newFileName" ]; then
+  rm "$downloadPath/$newFileName"
+fi
+if [ -n "$csvFilePath" ]; then
+  mv "$csvFilePath" "$downloadPath/$newFileName"
+  echo "Plik CSV został zapisany jako: $downloadPath/$newFileName"
 else
-  echo "Nie udało się pobrać pliku ZIP. Sprawdź logi curl."
+  echo "Nie znaleziono pliku CSV po wypakowaniu."
 fi
